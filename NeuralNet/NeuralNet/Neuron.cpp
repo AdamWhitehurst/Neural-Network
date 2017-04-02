@@ -23,15 +23,19 @@ double Neuron::randomWeight()
 	return rand() / double(RAND_MAX);
 }
 
-void Neuron::feed(const Layer &prevLayer)
+void Neuron::feed(const NeuronLayer &prevLayer)
 {
+	// Calculate the sum of the weighted outputs from the previous layer
+	// Sum = sum of all neurons' outputs times that neuron's weight
+	//		 from the previous layer
 	double sum = 0.0;
 
-	for (unsigned ni = 0; ni < prevLayer.size(); ni++) {
+	for (unsigned ni = 0; ni < prevLayer.size(); ni++) { // ni = neuron index
 		sum += prevLayer[ni].getOutput() * prevLayer[ni]._outputWeights[_index].weight;
 	}
 
-	_output = Neuron::transferFunction(sum);
+	// Determine whether the sum passes the Transfer Threshold
+	_output = Neuron::transferThresholdFunction(sum);
 }
 
 void Neuron::setOutput(const double newOutput)
@@ -49,51 +53,69 @@ void Neuron::setOutputWeights(const vector<Connection> ow)
 	_outputWeights = ow;
 }
 
-Connection & Neuron::getConnection(unsigned ci)
+void Neuron::calculateHiddenGradients(const NeuronLayer & nextLayer)
 {
-	return _outputWeights[ci];
-}
-
-void Neuron::calculateHiddenGradients(const Layer & nextLayer)
-{
-	// Calculate the sum of the derivative of weights
-	double dow = sumDOW(nextLayer);
-	_gradient = dow * Neuron::transferFunctionDerivative(_output);
-
-			
+	// Calculate the sum of the derivatives of the weights
+	double dow = sumDerivativesOfWeights(nextLayer);
+	_gradient = dow * Neuron::transferThresholdFunctionDerivative(_output);
 }
 
 void Neuron::calculateOutputGradients(double target)
 {
-	double delta = target;
-	_gradient = delta * Neuron::transferFunctionDerivative(_output);
+	double delta = target - _output;
+	_gradient = delta * Neuron::transferThresholdFunctionDerivative(_output);
 }
 
-double Neuron::sumDOW(const Layer & nextLayer) const
+double Neuron::sumDerivativesOfWeights(const NeuronLayer & nextLayer) const
 {
 	double sum = 0;
 
 	// Sum the error contributions of this neuron
-	// to the neurons that it feeds on the next layer
-	for (unsigned ni = 0; ni < nextLayer.size() - 1; ni++) { // Exclude bias
+	// to the neurons that it feeds on the next layer, excluding bias neuron
+	for (unsigned ni = 0; ni < nextLayer.size() - 1; ni++) { // ni = neuron index
 		sum += _outputWeights[ni].weight * nextLayer[ni]._gradient;
 	}
 
 	return sum;
 }
 
-void Neuron::updateInputWeights(Layer & prevLayer)
+void Neuron::calculateInputWeights(NeuronLayer & prevLayer)
 {
+	for (unsigned ni = 0; ni < prevLayer.size(); ni++) { // ni = neuron index
+		Neuron &neuron = prevLayer[ni];
+		double oldDeltaWeight = neuron._outputWeights[_index].deltaWeight;
+
+		// Calculate new delta weight
+		double newDeltaWeight =
+			// Neurons' individual output, magnified by the gradient and train rate:
+			neuron.getOutput() * eta * _gradient
+			// Also add momentum (a fraction of the old delta weight);
+			+ alpha * oldDeltaWeight;
+
+		// Set the new delta weight for this neuron's connection to the neuron on the next layer
+		neuron._outputWeights[_index].deltaWeight = newDeltaWeight;
+
+		// Modify the connection weight by the new delta weight
+		neuron._outputWeights[_index].weight += newDeltaWeight;
+	}
+}
+
+double Neuron::transferThresholdFunction(const double x)
+{
+	// Hyperbolic Tangent Function: a fast approximation to sigmoid function
+	return tanh(x);
 	
+	// Sigmoid Function: the real deal
+	// return 1 / (1 + exp(-x));
 }
 
-double Neuron::transferFunction(const double sum)
-{
-	//TODO: Sigmoid func instead?
-	return tanh(sum);
-}
+double Neuron::transferThresholdFunctionDerivative(const double x)
+{	
+	// Hyperbolic Tangent Derivative Function:
+	// SAA: tanh(x) ~~ x
+	return (1 - x * x);
 
-double Neuron::transferFunctionDerivative(const double sum)
-{	// SAA: tanh(sum) ~~ sum
-	return (1 - sum * sum);
+	// Sigmoid Derivative Function
+	// sigma = transferThresholdFunction(x);
+	// return sigma(1 - sigma);
 }

@@ -15,20 +15,33 @@
 using namespace std;
 
 typedef vector<Neuron> Layer;
+typedef vector<double> InputVals;
+typedef vector<double> TargetVals;
+
+struct TrainingData {
+public:
+	double errorMargin = 0.01;
+	unsigned trainingPass = 0;
+	vector<InputVals> inputs;
+	TargetVals targets;
+	vector<double> results;
+};
 
 class NeuralNet
 {
 public:
 	NeuralNet(const vector<unsigned> &topology);
 	~NeuralNet();
+	void train(TrainingData &trainingData);
 	void feedForward(const vector<double> &inputs);
 	void backProp(const vector<double> &targets);
 	void getResults(vector<double> &results) const;
+	double getRecentAverageError();
 private:
 	vector<Layer> _layers; // layers[layerIndex][neuronIndex]
 	double _netError;
 	double _recentAverageError;
-	double _recentAverageErrorSmoothingFactor;
+	static double _recentAverageSmoothingFactor;
 };
 
 #endif // !NEURALNET_H
